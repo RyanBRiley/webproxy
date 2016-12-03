@@ -10,22 +10,39 @@ PA-4 Web Proxy
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define MAXBUFSIZE 256
+
+int handle_proxy(int *sock)
+{
+    char msg_in[MAXBUFSIZE];
+    char msg_out[MAXBUFSIZE];
+    sprintf(msg_out, "Connected to server, please enter a command\n");
+    send(*sock, msg_out, strlen(msg_out), 0);
+    recv(*sock, msg_in, MAXBUFSIZE, 0);
+    msg_in[strlen(msg_in)-1] = '\0';
+    printf("msg 0: %s\n", msg_in);
+    close(*sock);
+    pthread_exit(NULL);
+}
 
 int main(int argc, char *argv[])
 {
 	int sock;
 	int sock_connection;                //This will be our socket
-	int *sock_cp;
-	struct sockaddr_in sin, remote;  
-	unsigned int remote_length = sizeof(struct sockaddr_in);         //length of the sockaddr_in structure
+	struct sockaddr_in proxy_addr, client_addr;
+	unsigned int client_addr_length = sizeof(struct sockaddr_in);         //length of the sockaddr_in structure
 
-	int config = configure_server();
+	if (argc != 2)
+	{
+		fprintf(stderr, "USAGE: ./webproxy <port no>\n");
+		exit(1);
+	}
 
-	sin.sin_family = AF_INET;                   //address family
-	sin.sin_port = htons(listenport);        	//htons() sets the port # to network byte order
-	sin.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
+	proxy_addr.sin_family = AF_INET;                   //address family
+	proxy_addr.sin_port = htons((uint16_t) atoi(argv[1]));        	//htons() sets the port # to network byte order
+	proxy_addr.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
 
 	//Build Socket
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -36,9 +53,10 @@ int main(int argc, char *argv[])
 
 	
 	//Bind Socket
-	if (bind(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
+	if (bind(sock, (struct sockaddr *)&proxy_addr, sizeof(proxy_addr)) < 0)
 	{
-		printf("unable to bind socket\n");
+		fprintf(stderr, "unable to bind socket\n");
+        exit(1);
 	}
 	printf("socket bind is complete\n");
 
@@ -47,23 +65,22 @@ int main(int argc, char *argv[])
 	printf("listening for connections\n");
 	
 	
-	//Grab connection, fork a new process to handle it
+	//Grab connection, spawn a new thread to handle it
 	while(1)
 	{	
-		if((sock_connection = accept(sock, (struct sockaddr *)&remote, (socklen_t *)&remote_length)) > 0)
-		{	
-			printf("connection  formed\n");	
-			int pid = fork();
-			if(pid == 0)
-			{
-				server_function(sock_connection);
-				close(sock_connection);
-				exit(0);
+		if((sock_connection = accept(sock, (struct sockaddr *)&client_addr, &client_addr_length)) > 0)
+		{
+            puts("connection formed");
+            pthread_t connection_thread;
+            int sock_dup = sock_connection;
+            if(pthread_create(&connection_thread, NULL, (void * (*)(void *)) handle_proxy, (void *) &sock_dup))
+            {
+                perror("ERROR creating thread");
+                exit(1);
+            }
+            puts("thread launched");
+            pthread_join(connection_thread, NULL);
 
-			}
-			
 		}
 	}
-	close(sock);
-	return 0;
 }
