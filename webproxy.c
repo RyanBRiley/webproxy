@@ -66,9 +66,7 @@ int main(int argc, char *argv[])
 	
 	
 	//Grab connection, spawn a new thread to handle it
-	while(1)
-	{	
-		if((sock_connection = accept(sock, (struct sockaddr *)&client_addr, &client_addr_length)) > 0)
+	while((sock_connection = accept(sock, (struct sockaddr *)&client_addr, &client_addr_length)) > 0)
 		{
             puts("connection formed");
             pthread_t connection_thread;
@@ -82,5 +80,5 @@ int main(int argc, char *argv[])
             pthread_join(connection_thread, NULL);
 
 		}
-	}
+    return 0;
 }
