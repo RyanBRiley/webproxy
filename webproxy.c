@@ -21,47 +21,132 @@ int process_get_request(int sock, char *request)
     struct hostent *host;
     struct in_addr **host_addr;
 
+    char method[MAXBUFSIZE];
+    char uri[MAXBUFSIZE];
+    char protocol[MAXBUFSIZE];
+    char body[MAXBUFSIZE];
+    char full_req[MAXBUFSIZE];
+    char response[MAXBUFSIZE];
     int host_sock;
-    int connection;
 
-    char *token = strsep(&request, " ");
+    sscanf(request, "%s %s %s %s", method, uri, protocol, body);
+//    printf("request before strktok: %s\n", request);
+    strcat(uri, "+{");
+    printf("uri: %s\n", uri);
+    char *uri_dup;
+    char *cut_host;
+    char *cut_uri;
+    if(!strncmp(uri, "http://", strlen("http://")))
+    {
+        puts("condition 1");
+        uri_dup = strdup(uri + strlen("http://"));
+        cut_host = strtok(uri_dup, "/");
+        printf("condition 1 cut host: %s\ncondition 1 uri_dup: %s\n", cut_host, uri_dup);
+        cut_uri = strtok(NULL, "+{");
+        printf("condition 1 cut uri: %s\ncondition 1 uri_dup: %s\n", cut_uri, uri_dup);
+    }
+    else if(!strncmp(uri, "https://", strlen("https://")))
+    {
+        puts("condition 2");
+
+        uri_dup = strdup(uri + strlen("https://"));
+        cut_host = strtok(uri_dup, "/");
+        printf("condition 1 cut host: %s\ncondition 1 uri_dup: %s\n", cut_host, uri_dup);
+        cut_uri = strtok(NULL, "+{");
+        printf("condition 1 cut uri: %s\ncondition 1 uri_dup: %s\n", cut_uri, uri_dup);
+    }
+    else
+    {
+        puts("condition 3");
+        uri_dup = strdup(uri);
+        cut_host = strtok(uri_dup, "/");
+        printf("condition 1 cut host: %s\ncondition 1 uri_dup: %s\n", cut_host, uri_dup);
+        cut_uri = strtok(NULL, "+{");
+        printf("condition 1 cut uri: %s\ncondition 1 uri_dup: %s\n", cut_uri, uri_dup);
+    }
+    host = gethostbyname(cut_host);
+/*    printf("uri_dup: %s\n", uri_dup);
+    char *cut_uri_1 = strtok(uri_dup, "//");
+    printf("cut_uri_1: %s\n", cut_uri_1);
+    printf("uri_dup0: %s\n", uri_dup);
+    char *cut_uri_2= strtok(NULL, "/");
+    printf("cut_uri_2: %s\n", cut_uri_2);
+    char *cut_uri_3 = strtok(NULL, "\r");
+    printf("cut_rui_3: %s\n", cut_uri_3);
+//    printf("request after strtok: %s\n", request);
+    if(cut_uri_2 == NULL)
+    {
+        host = gethostbyname(cut_uri_1);
+    }
+    else
+    {
+        host = gethostbyname(cut_uri_2);
+    }*/
+    /*char *token = strsep(&request, " ");
     printf("in process get, token: %s\n", token);
     if(!strncmp(token, "http://", strlen("http://")) || !strncmp(token, "https://", strlen("https://")))
     {
+        printf("TOKEN : %s\n", token);
         char *token_dup = strdup(token);
         strtok(token_dup, "://");
-        host = gethostbyname(token+strlen(token_dup)+3);
+        printf("token_dup 00000: %s\n", token+strlen(token_dup)+3);
+        char tokcpy[MAXBUFSIZE];
+        strcpy(tokcpy, token+strlen(token_dup)+3);
+        tokcpy[strlen(tokcpy) -1] = '\0';
+        printf("tokcpy: %s\n",tokcpy);
+
+        host = gethostbyname(tokcpy);
+
+
     }
     else
     {
         host = gethostbyname(token);
-    }
+    }*/
+    printf("host name: %s\n", host->h_name);
     host_addr = (struct in_addr **)host->h_addr_list;
 
     bzero(&req_addr,sizeof(struct sockaddr_in));               //zero the struct
     req_addr.sin_family = AF_INET;                 //address family
     req_addr.sin_port = htons(80);      //sets port to network byte order
     req_addr.sin_addr.s_addr = inet_addr(inet_ntoa(*host_addr[0])); //sets server1 IP address
-
+//    printf("%s ", inet_ntoa(*host_addr[0]));
+//    printf("req_addr: %s\n", inet_ntoa(inet_addr(req_addr.sin_addr.s_addr)));
     if((host_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0 )
     {
         fprintf(stderr, "Unable to connect to host\n");
         exit(1);
     }
-    if((connection = connect(host_sock, (struct sockaddr *)&req_addr, sizeof(req_addr))) < 0)
+    if(connect(host_sock, (struct sockaddr *)&req_addr, sizeof(req_addr)) < 0)
     {
         fprintf(stderr, "Unable to connect to host\n");
         exit(1);
     }
+
+    !cut_uri ? sprintf(full_req, "GET / HTTP/1.0\r\n\n") : sprintf(full_req, "GET /%s HTTP/1.0\r\n\n", cut_uri);
+    printf("full request: %s\n", full_req);
+    int bsent = (int) send(host_sock, full_req, strlen(full_req), 0);
+    printf("bsent: %d\n", bsent);
+    bsent = 0;
+    //recv(host_sock, response, MAXBUFSIZE, 0);
+    //send(sock, response, MAXBUFSIZE, 0);
+    while(recv(host_sock, response, MAXBUFSIZE, 0))
+    {
+        bsent = (int) send(sock, response, MAXBUFSIZE, 0);
+        printf("bsent: %d\n",bsent);
+    }
+    int brecv = (int) recv(host_sock, response, MAXBUFSIZE, 0);
+    printf("brecv: %d\n", brecv);
+    printf("---------response---------\n%s\n------------------\n", response);
     puts("PROCESS GET REQUEST");
     printf("request: %s\n", request);
-    exit(1);
+    pthread_exit(NULL);
 }
 
 int handle_proxy(int *sp)
 {
 	char request[MAXBUFSIZE];
-    char status[MAXBUFSIZE];
+//    char status[MAXBUFSIZE];
     char *token;
     char *request_dup;
 
@@ -69,7 +154,7 @@ int handle_proxy(int *sp)
 
 	/* Parse request    */
     recv(sock, request, MAXBUFSIZE, 0);
-    printf("request: %s\n", request);
+//    printf("request: %s\n", request);
     request_dup = strdup(request);
     token = strsep(&request_dup, " ");
     if(strcmp(token, "GET") && strcmp(token, "HEAD") && strcmp(token, "POST") && strcmp(token, "PUT") && strcmp(token, "DELETE") && strcmp(token, "LINK") && strcmp(token, "UNLINK"))
@@ -84,8 +169,8 @@ int handle_proxy(int *sp)
     }
     else
     {
-        printf("request_dup: %s\n", request_dup);
-        process_get_request(sock, request_dup);
+//        printf("request_dup: %s\n", request_dup);
+        process_get_request(sock, request);
     }
     printf("token: %s\n", token);
     close(sock);
