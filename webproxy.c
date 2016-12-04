@@ -186,8 +186,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		puts("thread launched");
-		pthread_join(connection_thread, NULL);
-
+//		pthread_join(connection_thread, NULL);
+        pthread_detach(connection_thread);
 	}
     return 0;
 }
