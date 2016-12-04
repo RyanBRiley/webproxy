@@ -48,7 +48,7 @@ int process_get_request(int sock, char *request)
         fprintf(stderr, "Unable to connect to host\n");
         exit(1);
     }
-    if(connection = connect(host_sock, (struct sockaddr *)&req_addr, sizeof(req_addr)) < 0)
+    if((connection = connect(host_sock, (struct sockaddr *)&req_addr, sizeof(req_addr))) < 0)
     {
         fprintf(stderr, "Unable to connect to host\n");
         exit(1);
