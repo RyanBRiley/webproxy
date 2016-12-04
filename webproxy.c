@@ -15,24 +15,39 @@ PA-4 Web Proxy
 
 #define MAXBUFSIZE 2048
 
-int process_get_request(int sock, char *request)
+
+void handle_error(int sock, int err_code, char *protocol, char *err_msg)
+{
+    puts("ERROR HANDLER");
+    char err[MAXBUFSIZE];
+    switch(err_code)
+    {
+        case 400:
+            sprintf(err, "%s 400 Bad Request\r\n<html><body>400 Bad Request Reason: %s</body></html>\r\n\r\n", protocol, err_msg);
+            break;
+
+        case 501:
+            sprintf(err, "%s 501 Not Implemented\r\n<html><body>501 Not Implemented Reason: %s</body></html>\r\n\r\n", protocol, err_msg);
+            break;
+
+        default:
+            sprintf(err, "%s 500 Internal Server Error: cannot allocate memory\r\n\r\n", protocol);
+            break;
+    }
+    send(sock, err, strlen(err), 0);
+    return;
+}
+
+int process_get_request(int sock, char *uri, char *request)
 {
     struct sockaddr_in req_addr;
     struct hostent *host;
     struct in_addr **host_addr;
 
-    char method[MAXBUFSIZE];
-    char uri[MAXBUFSIZE];
-    char protocol[MAXBUFSIZE];
     char *body;
     char full_req[MAXBUFSIZE];
     char response[MAXBUFSIZE];
     int host_sock;
-
-    sscanf(request, "%s %s %s", method, uri, protocol);
-    body = strdup(request);
-    char *detritus = strsep(&body, "\n");
-
 
     char *http_type = malloc(sizeof(char) * MAXBUFSIZE);
     char *full_path = malloc(sizeof(char) * MAXBUFSIZE);
@@ -40,7 +55,8 @@ int process_get_request(int sock, char *request)
     char *file_path = malloc(sizeof(char) * MAXBUFSIZE);
     char *port_no;
 
-
+    body = strdup(request);
+    char *detritus = strsep(&body, "\n");
 
     if(!strncmp(uri, "http://", strlen("http://")) || !strncmp(uri, "https://", strlen("https://")))
     {
@@ -70,20 +86,21 @@ int process_get_request(int sock, char *request)
 
     host_addr = (struct in_addr **)host->h_addr_list;
 
+    /* Configure the outbound socket */
     bzero(&req_addr,sizeof(struct sockaddr_in));               //zero the struct
     req_addr.sin_family = AF_INET;                 //address family
     !port_no ? (req_addr.sin_port = htons(80)) : (req_addr.sin_port = htons((uint16_t) atoi(port_no)));     //sets port to network byte order
-    req_addr.sin_addr.s_addr = inet_addr(inet_ntoa(*host_addr[0])); //sets server1 IP address
+    req_addr.sin_addr.s_addr = inet_addr(inet_ntoa(*host_addr[0])); //sets IP address
 
     if((host_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0 )
     {
         fprintf(stderr, "Unable to connect to host\n");
-        exit(1);
+        return 1;
     }
     if(connect(host_sock, (struct sockaddr *)&req_addr, sizeof(req_addr)) < 0)
     {
         fprintf(stderr, "Unable to connect to host\n");
-        exit(1);
+        return 1;
     }
 
     sprintf(full_req, "GET /%s HTTP/1.0 \r\n%s\r\n\r\n", file_path, body);
@@ -94,42 +111,58 @@ int process_get_request(int sock, char *request)
 
     while(recv(host_sock, response, 256, 0) > 0)
     {
-        send(sock, response, 256, 0);
-//        printf("---------response---------\n%s\n------------------\n", response);
+        send(sock, response, 256, 0);//possible problem here
         memset(response, 0, sizeof(response));
     }
-    pthread_exit(NULL);
+
+    free(http_type);
+    free(full_path);
+    free(host_path);
+    free(file_path);
+    free(port_no);
+    free(detritus);
+
+    return 0;
 }
 
 int handle_proxy(int *sp)
 {
 	char request[MAXBUFSIZE];
-    char *token;
-    char *request_dup;
+    char method[MAXBUFSIZE];
+    char uri[MAXBUFSIZE];
+    char protocol[MAXBUFSIZE];
 
 	int sock = *sp;
 
 	/* Parse request    */
     recv(sock, request, MAXBUFSIZE, 0);
+    sscanf(request, "%s %s %s", method, uri, protocol);
+    printf("in handle proxy, method: %s\nprotocol: %s\n", method, protocol);
 
-    request_dup = strdup(request);
-    token = strsep(&request_dup, " ");
-
-
-    if(strcmp(token, "GET") && strcmp(token, "HEAD") && strcmp(token, "POST") && strcmp(token, "PUT") && strcmp(token, "DELETE") && strcmp(token, "LINK") && strcmp(token, "UNLINK"))
+    if(strcmp(protocol, "HTTP/1.0"))
     {
-        puts("INVALID METHOD TYPE");
+        handle_error(sock, 400, protocol, "Invalid HTTP-Version");
+        puts("error 501 Not implemented reason: protocol");
+        close(sock);
         pthread_exit(NULL);
     }
-    if(strcmp(token, "GET"))
+    if(strcmp(method, "GET") && strcmp(method, "HEAD") && strcmp(method, "POST") && strcmp(method, "PUT") && strcmp(method, "DELETE") && strcmp(method, "LINK") && strcmp(method, "UNLINK"))
     {
-        puts("METHOD UNSUPPORTED");
+        handle_error(sock, 400, protocol, "Invalid Method");
+        puts("INVALID METHOD TYPE 400 Bad Request");
+        close(sock);
+        pthread_exit(NULL);
+    }
+    if(strcmp(method, "GET"))
+    {
+        handle_error(sock, 501, protocol, method);
+        puts("METHOD UNSUPPORTED 501 NOT IMPLEMENTED");
+        close(sock);
         pthread_exit(NULL);
     }
     else
     {
-
-        process_get_request(sock, request);
+        process_get_request(sock, uri, request);
     }
 
     close(sock);
@@ -139,7 +172,7 @@ int handle_proxy(int *sp)
 int main(int argc, char *argv[])
 {
 	int sock;
-	int sock_connection;                //This will be our socket
+	int sock_connection;
 	struct sockaddr_in proxy_addr, client_addr;
 	unsigned int client_addr_length = sizeof(struct sockaddr_in);         //length of the sockaddr_in structure
 
@@ -186,7 +219,6 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		puts("thread launched");
-//		pthread_join(connection_thread, NULL);
         pthread_detach(connection_thread);
 	}
     return 0;
