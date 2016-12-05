@@ -1,4 +1,4 @@
-# simple webproxy
+# simple multi-threaded webproxy
 
 CSCI4273
 
@@ -7,7 +7,7 @@ Author: Ryan Riley
 2 December 2016
 
 Description:
-Simple webproxy that will accept requests from a client, validate and forward to the requested address. The results are then forwarded back to the appropriate client.
+A simple multi-threaded webproxy that will accept requests from a client, validate and forward to the requested address. The results are then forwarded back to the appropriate client.
 
 TO MAKE:
 make 
