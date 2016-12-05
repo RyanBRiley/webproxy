@@ -15,7 +15,9 @@ PA-4 Web Proxy
 
 #define MAXBUFSIZE 2048
 
-
+/*
+ *  Produces an error message in accordance with the error encountered and sends message to client
+ */
 void handle_error(int sock, int err_code, char *protocol, char *err_msg)
 {
     puts("ERROR HANDLER");
@@ -38,6 +40,11 @@ void handle_error(int sock, int err_code, char *protocol, char *err_msg)
     return;
 }
 
+/*
+ * Proxy has determined that the request is a valid GET request,
+ * this function will process the request, send it to the requested address
+ * and return results
+ */
 int process_get_request(int sock, char *uri, char *request)
 {
     struct sockaddr_in req_addr;
@@ -55,9 +62,11 @@ int process_get_request(int sock, char *uri, char *request)
     char *file_path = malloc(sizeof(char) * MAXBUFSIZE);
     char *port_no;
 
+    /*Extract the body of the request*/
     body = strdup(request);
     char *detritus = strsep(&body, "\n");
 
+    /*Determine if the request has the chars http in front, if so discard so gethostbyname will work*/
     if(!strncmp(uri, "http://", strlen("http://")) || !strncmp(uri, "https://", strlen("https://")))
     {
         sscanf(uri, "%[^/]//%s", http_type, full_path);
@@ -69,6 +78,7 @@ int process_get_request(int sock, char *uri, char *request)
         sscanf(uri, "%[^/]/%s", host_path, file_path);
     }
 
+    /*Process port number if included */
     int i;
     for(i = 0; i < strlen(host_path); i++)
     {
@@ -103,6 +113,7 @@ int process_get_request(int sock, char *uri, char *request)
         return 1;
     }
 
+    /*reassemble request*/
     sprintf(full_req, "GET /%s HTTP/1.0 \r\n%s\r\n\r\n", file_path, body);
 
     printf("full request: %s\n", full_req);
@@ -125,6 +136,9 @@ int process_get_request(int sock, char *uri, char *request)
     return 0;
 }
 
+/*
+ * Generic request handler: figure out if it is a well-formed get request
+ */
 int handle_proxy(int *sp)
 {
 	char request[MAXBUFSIZE];
@@ -139,6 +153,7 @@ int handle_proxy(int *sp)
     sscanf(request, "%s %s %s", method, uri, protocol);
     printf("in handle proxy, method: %s\nprotocol: %s\n", method, protocol);
 
+    /*check to see if the protocol is supported*/
     if(strcmp(protocol, "HTTP/1.0"))
     {
         handle_error(sock, 400, protocol, "Invalid HTTP-Version");
@@ -146,6 +161,8 @@ int handle_proxy(int *sp)
         close(sock);
         pthread_exit(NULL);
     }
+
+    /*check to see if the method is defined in RFC1945*/
     if(strcmp(method, "GET") && strcmp(method, "HEAD") && strcmp(method, "POST") && strcmp(method, "PUT") && strcmp(method, "DELETE") && strcmp(method, "LINK") && strcmp(method, "UNLINK"))
     {
         handle_error(sock, 400, protocol, "Invalid Method");
@@ -153,6 +170,8 @@ int handle_proxy(int *sp)
         close(sock);
         pthread_exit(NULL);
     }
+
+    /*check to see if the method is supported*/
     if(strcmp(method, "GET"))
     {
         handle_error(sock, 501, protocol, method);
@@ -160,6 +179,8 @@ int handle_proxy(int *sp)
         close(sock);
         pthread_exit(NULL);
     }
+
+        /*must be get request, process*/
     else
     {
         process_get_request(sock, uri, request);
@@ -169,6 +190,9 @@ int handle_proxy(int *sp)
     pthread_exit(NULL);
 }
 
+/*
+ * main - make connection with client, spawn threads for each connection
+ */
 int main(int argc, char *argv[])
 {
 	int sock;
