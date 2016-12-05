@@ -62,9 +62,16 @@ int process_get_request(int sock, char *uri, char *request)
     char *file_path = malloc(sizeof(char) * MAXBUFSIZE);
     char *port_no;
 
+    memset(http_type, 0, strlen(http_type));
+    memset(full_path, 0, strlen(full_path));
+    memset(host_path, 0, strlen(host_path));
+    memset(file_path, 0, strlen(file_path));
+
     /*Extract the body of the request*/
     body = strdup(request);
     char *detritus = strsep(&body, "\n");
+    char *body_dup = strdup(body);
+    char *host_header = strsep(&body_dup, "\n");
 
     /*Determine if the request has the chars http in front, if so discard so gethostbyname will work*/
     if(!strncmp(uri, "http://", strlen("http://")) || !strncmp(uri, "https://", strlen("https://")))
@@ -114,15 +121,29 @@ int process_get_request(int sock, char *uri, char *request)
     }
 
     /*reassemble request*/
-    sprintf(full_req, "GET /%s HTTP/1.0 \r\n%s\r\n\r\n", file_path, body);
+//    sprintf(full_req, "GET /%s HTTP/1.0\r\n%s\r\n\r\n", file_path, body);
 
+    printf("HOST HEADER: %s\n strlen(host_header): %d\n", host_header, (int) strlen(host_header));
+//    printf("host header end: %c\n", host_header[strlen(host_header)-1]);
+    char host_header_cpy[64];
+    memset(host_header_cpy, 0, sizeof(host_header_cpy));
+    strncpy(host_header_cpy, host_header, strlen(host_header)-1);
+    printf("host header cpy: %s\n", host_header_cpy);
+    sprintf(full_req, "GET /%s HTTP/1.0\r\n%s\r\nConnection: close\r\n\r\n", file_path, host_header_cpy);
+//    sprintf(full_req, "GET /%s HTTP/1.0\r\n%s\r\n\r\n", file_path, host_header);
+    /*sprintf(full_req, "GET /%s HTTP/1.0\r\n", file_path);
     printf("full request: %s\n", full_req);
-
+    send(host_sock, full_req, strlen(full_req), 0);
+    memset(full_req, 0, sizeof(full_req));
+    sprintf(full_req, "%s\r\n", host_header);*/
+    printf("full request: %s\n", full_req);
     send(host_sock, full_req, strlen(full_req), 0);
 
-    while(recv(host_sock, response, 256, 0) > 0)
+//    send(host_sock, full_req, strlen(full_req), 0);
+
+    while(recv(host_sock, response, MAXBUFSIZE, 0) > 0)
     {
-        send(sock, response, 256, 0);//possible problem here
+        send(sock, response, MAXBUFSIZE, 0);//possible problem here
         memset(response, 0, sizeof(response));
     }
 
