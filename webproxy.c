@@ -79,7 +79,7 @@ int process_get_request(int sock, char *uri, char *request)
     }
 
     /*Process port number if included */
-    int i;
+    uint16_t i;
     for(i = 0; i < strlen(host_path); i++)
     {
         if(host_path[i] == ':')
