@@ -45,7 +45,7 @@ void handle_error(int sock, int err_code, char *protocol, char *err_msg)
  * this function will process the request, send it to the requested address
  * and return results
  */
-int process_get_request(int sock, char *uri, char *request)
+int process_get_request(int sock, char *uri, char *request, char *protocol)
 {
     struct sockaddr_in req_addr;
     struct hostent *host;
@@ -142,14 +142,14 @@ int process_get_request(int sock, char *uri, char *request)
 
     /*reassemble request*/
 
-    printf("host header cpy: %s\n", host_header_cpy);
-    sprintf(full_req, "GET /%s HTTP/1.0\r\n%s\r\nConnection: close\r\n\r\n", file_path, host_header_cpy);
+    sprintf(full_req, "GET /%s %s\r\n%s\r\nConnection: close\r\n\r\n", file_path, protocol, host_header_cpy);
     printf("-----------full request----------\n%s\n--------------------------------\n", full_req);
     send(host_sock, full_req, strlen(full_req), 0);
 
-    while(recv(host_sock, response, MAXBUFSIZE, 0) > 0)
+    int bytes_recv = 0;
+    while((bytes_recv = recv(host_sock, response, MAXBUFSIZE, 0)) > 0)
     {
-        send(sock, response, MAXBUFSIZE, 0);//possible problem here
+        send(sock, response, bytes_recv, 0);//possible problem here
         memset(response, 0, sizeof(response));
     }
 
@@ -210,7 +210,7 @@ int handle_proxy(int *sp)
         /*must be get request, process*/
     else
     {
-        process_get_request(sock, uri, request);
+        process_get_request(sock, uri, request, protocol);
     }
 
     close(sock);
